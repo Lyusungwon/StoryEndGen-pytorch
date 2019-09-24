@@ -47,4 +47,24 @@ if __name__ == '__main__':
         print(batch['entity_1'].size()) # batch_size * variable length * 10 * 3(tokens for h/r/t)
         print(batch['entity_length_1'].size()) # batch_size
         print(batch['response'].size()) # batch_size * variable length
+        
+#         'posts_1': np.array(posts_1), # batch_size, sentence length, / sorted in descending order
+#                     'posts_2': np.array(posts_2), 
+#                     'posts_3': np.array(posts_3), 
+#                     'posts_4': np.array(posts_4),       
+#                     'entity_1': np.array(entity_0),
+#                     'entity_2': np.array(entity_1),
+#                     'entity_3': np.array(entity_2),
+#                     'entity_4': np.array(entity_3),
+#                     'entity_mask_1': np.array(entity_mask_0),
+#                     'entity_mask_2': np.array(entity_mask_1),
+#                     'entity_mask_3': np.array(entity_mask_2),
+#                     'entity_mask_4': np.array(entity_mask_3),
+#                      posts, entities sorted indices
+#                     'posts_length_1': posts_length_1, 
+#                     'posts_length_2': posts_length_2, 
+#                     'posts_length_3': posts_length_3, 
+#                     'posts_length_4': posts_length_4, 
+#                     'responses': np.array(responses),
+#                     'responses_length': responses_length
         break
