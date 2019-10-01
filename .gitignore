@@ -1,3 +1,9 @@
+# ROCStories Dataset files
+data/
+
+# JetBrains IDE Configuration files
+.idea/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
