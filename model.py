@@ -44,10 +44,6 @@ def get_pad_mask(valid_bsz_by_timestep):
 class IEMSAModel(nn.Module):
     def __init__(self, args, idx2word):
         super().__init__()
-        # embed projection
-        # lstm : 2-layer, shared by encoder, decoder, 512d
-        # MSA
-        # encoder output projection
         self.args = args
         assert len(idx2word) == args.n_word_vocab, 'idx2word size does not match designated vocab size'
         self.n_vocab = args.n_word_vocab
@@ -97,8 +93,12 @@ class IEMSAModel(nn.Module):
             post, post_len, ent, ent_len, ent_mask = post_lst[i], post_length_lst[i], entity_lst[i], entity_length_lst[i], entity_mask_lst[i]
 
             post = self.word_embedding(post) # (b, l, d_embed)
-            ent = self.word_embedding(ent) # (b, l, n_triple, 3, d_embed)
-            
+
+            head = self.word_embedding(ent[:, :, :, 0]).unsqueeze(-2)
+            rel = self.rel_embedding(ent[:, :, :, 1]).unsqueeze(-2)
+            tail = self.word_embedding(ent[:, :, :, 2]).unsqueeze(-2)
+            ent = torch.cat([head, rel, tail], dim=3) # (b, l, n_triple, 3, d_embed)
+
             ### Encode post sequence.
 
             # Sort post sequence by descending length order and pack
@@ -134,8 +134,6 @@ class IEMSAModel(nn.Module):
 
             # cache for later use.
             cached_post, cached_post_mask, cached_graph_vec, cached_graph_vec_mask = post, post_mask, graph_vec, graph_vec_mask
-
-        ipdb.set_trace()
 
         ### Decode: supports unrolling.
         bsz, max_decode_len = response.size()
@@ -199,7 +197,6 @@ class MultiSourceAttention(nn.Module):
         # build attentional query
         combined = torch.cat([query, msa_context], dim=-1) # (bsz, len_q, 2d)
         output = torch.tanh(self.W_mix(combined)) # (bsz, len_q, d)
-        ipdb.set_trace()
 
         return output, msa_context, state_attn, knowledge_attn
 
