@@ -155,7 +155,7 @@ class IEMSAModel(nn.Module):
             top1 = logit.max(-1)[1] # (b, 1)
 
             # stochastic teacher forcing
-            if random.random() < teacher_force_ratio:
+            if random.random() < teacher_force_ratio and t < response.size()[1]-1: # SW: teacher forcing does not applied in the last
                 dec_input = response[:, t+1].unsqueeze(1) # ground truth
             else:
                 dec_input = top1
