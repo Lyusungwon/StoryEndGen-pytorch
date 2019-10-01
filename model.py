@@ -114,7 +114,7 @@ class IEMSAModel(nn.Module):
 
             # make mask for sequence attention
             valid_bsz = packed_post.batch_sizes # Effective batch size at each timestep
-            post_mask = get_pad_mask(valid_bsz).unsqueeze(1) # (b, l, l_q)
+            post_mask = get_pad_mask(valid_bsz).unsqueeze(1).to(post.device) # (b, l, l_q)
             
             # lstm-encode
             packed_post, lstm_hidden = self.lstm(packed_post, lstm_hidden)
@@ -272,6 +272,7 @@ if __name__ == "__main__":
     idx2word = OrderedDict(sorted(idx2word.items(), key=lambda t: t[0]))
     
     model = IEMSAModel(args, idx2word)
+    model = model.to('cuda:0')
 
     bsz = args.batch_size
     max_t = 10
@@ -321,6 +322,7 @@ if __name__ == "__main__":
         batch[ent_mask_k][-1, :, :] = 1
         batch[ent_len_k][-1, :] = 0
 
-    batch['response'] = torch.randint(high=args.n_word_vocab, size=(bsz, max_t))
+    batch['responses'] = torch.randint(high=args.n_word_vocab, size=(bsz, max_t))
+    batch = {key: val.to("cuda:0") for key, val in batch.items()}
 
     model(batch)
