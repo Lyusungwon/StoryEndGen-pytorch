@@ -44,7 +44,7 @@ if __name__ == '__main__':
     for batch in dataloader:
         print(batch['posts_1'].size()) # batch_size * variable length / Sorted in descending order
         print(batch['posts_length_1'].size()) # batch_size
-        print(batch['entity_1'].size()) # batch_size * variable length * 10 * 3(tokens for h/r/t)
+        print(batch['entity_1'].size()) # batch_size * variable length * 10 * 3(tokens for h/r/t); one query(head) per timestep
         print(batch['entity_length_1'].size()) # batch_size
         print(batch['response'].size()) # batch_size * variable length
         
