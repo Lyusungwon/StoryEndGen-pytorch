@@ -9,8 +9,8 @@ import torch.nn.functional as F
 from torch.nn.init import kaiming_uniform_
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, PackedSequence
 import pandas as pd
-
-import ipdb
+import numpy as np
+import re
 
 PAD_ID = 0
 UNK_ID = 1
@@ -20,9 +20,13 @@ EOS_ID = 3
 def get_pretrained_glove(path, idx2word, n_special=4):
     print('Reading pretrained glove...')
     words = pd.read_csv(path, sep=" ", index_col=0, header=None, quoting=csv.QUOTE_NONE)
-
     def get_vec(w):
-        return words.loc[w].values.astype('float32')
+        # w = re.sub(r'\W+', '', w).lower() # SW: word tokenization needed
+        w = w.lower()
+        try:
+            return words.loc[w].values.astype('float32')
+        except KeyError: #_NAF_H, _NAF_R, _NAF_T
+            return np.zeros((200,), dtype='float32')
 
     weights = [torch.from_numpy(get_vec(w)) for i, w in list(idx2word.items())[n_special:]]
     weights = torch.stack(weights, dim=0)
@@ -73,12 +77,14 @@ class IEMSAModel(nn.Module):
         # NOTE: 앞뒤로 sos(2), eos(3) 붙어오는 것 가정
         # mask: (bsz, len, n_triple)
 
+        # SW: Would it be better to do this on dataloader?
         post_lst = [batch['post_1'], batch['post_2'], batch['post_3'], batch['post_4']] # (bsz, timestep)
         post_length_lst = [batch['post_length_1'], batch['post_length_2'], batch['post_length_3'], batch['post_length_4']] # (bsz)
         entity_lst = [batch['entity_1'], batch['entity_2'], batch['entity_3'], batch['entity_4']] # (bsz, timestep, n_triple, 3)
         entity_length_lst = [batch['entity_length_1'], batch['entity_length_2'], batch['entity_length_3'], batch['entity_length_4']] # (bsz, timestep)
         entity_mask_lst = [batch['entity_mask_1'], batch['entity_mask_2'], batch['entity_mask_3'], batch['entity_mask_4']] # (bsz, timestep, n_triple)
         response = batch['response'] # (bsz, timestep)
+        ###
 
         # prev sentence
         cached_post, cached_post_mask = None, None
@@ -108,7 +114,7 @@ class IEMSAModel(nn.Module):
 
             # make mask for sequence attention
             valid_bsz = packed_post.batch_sizes # Effective batch size at each timestep
-            post_mask = get_pad_mask(valid_bsz).unsqueeze(1) # (b, l, l_q)
+            post_mask = get_pad_mask(valid_bsz).unsqueeze(1).to(post.device) # (b, l, l_q)
             
             # lstm-encode
             packed_post, lstm_hidden = self.lstm(packed_post, lstm_hidden)
@@ -155,8 +161,8 @@ class IEMSAModel(nn.Module):
             top1 = logit.max(-1)[1] # (b, 1)
 
             # stochastic teacher forcing
-            if random.random() < teacher_force_ratio:
-                dec_input = response[:, t+1].unsqueeze(1) # ground truth
+            if random.random() < teacher_force_ratio and t < response.size()[1]-1: # SW: teacher forcing does not applied in the last
+                dec_input = response[:, t + 1].unsqueeze(1) # ground truth
             else:
                 dec_input = top1
 
@@ -256,7 +262,7 @@ if __name__ == "__main__":
         for line in inf:
             w = line.split()[0]
             if w not in word2idx:
-                idx = len(word2idx) + 4
+                idx = len(word2idx)
                 word2idx[w] = idx
         
             if len(word2idx) == args.n_word_vocab:
@@ -266,6 +272,7 @@ if __name__ == "__main__":
     idx2word = OrderedDict(sorted(idx2word.items(), key=lambda t: t[0]))
     
     model = IEMSAModel(args, idx2word)
+    model = model.to('cuda:0')
 
     bsz = args.batch_size
     max_t = 10
@@ -280,13 +287,13 @@ if __name__ == "__main__":
         ent_len_k = 'entity_length_{}'.format(i+1)
         ent_mask_k = 'entity_mask_{}'.format(i+1)
 
-        lengths = torch.randint(low=1, high=max_t, size=(bsz,))
-        batch[post_len_k] = torch.LongTensor(lengths)
-        max_post_t = lengths.max().item()
+        post_lengths = torch.randint(low=1, high=max_t, size=(bsz,)) # SW: variable name lengths -> post_lengths
+        batch[post_len_k] = torch.LongTensor(post_lengths)
+        max_post_t = post_lengths.max().item()
 
         batch[post_k] = torch.randint(high=args.n_word_vocab, size=(bsz, max_post_t))
         for b in range(bsz):
-            batch[post_k][b, lengths[b].item():] = 0
+            batch[post_k][b, post_lengths[b].item():] = 0
 
         batch[ent_k] = torch.zeros((bsz, max_post_t, max_n_triple, 3), dtype=torch.long)
         batch[ent_mask_k] = torch.zeros((bsz, max_post_t, max_n_triple), dtype=torch.bool)
@@ -294,7 +301,7 @@ if __name__ == "__main__":
         
         # first two batches: 
         for b in range(2):
-            for t in range(lengths[b].item()):
+            for t in range(post_lengths[b].item()):
                 # 첫 두개 triple만 채움
                 batch[ent_k][b, t, :2, 0] = batch[post_k][b, t] # head
                 batch[ent_k][b, t, :2, 1] = 1 # rel
@@ -303,7 +310,7 @@ if __name__ == "__main__":
             batch[ent_len_k][b, :] = 2
         
         # second-last batch
-        for t in range(lengths[-2].item()):
+        for t in range(post_lengths[-2].item()):
             # 하나만 채움
             batch[ent_k][-2, t, :1, 0] = batch[post_k][-2, t] # head
             batch[ent_k][-2, t, :1, 1] = 1 # rel
@@ -316,5 +323,6 @@ if __name__ == "__main__":
         batch[ent_len_k][-1, :] = 0
 
     batch['response'] = torch.randint(high=args.n_word_vocab, size=(bsz, max_t))
+    batch = {key: val.to("cuda:0") for key, val in batch.items()}
 
     model(batch)
