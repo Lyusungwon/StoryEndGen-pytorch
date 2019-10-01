@@ -11,6 +11,7 @@ _START_VOCAB = ['_PAD', '_UNK', '_SOS', '_EOS', '_NAF_H', '_NAF_R', '_NAF_T']
 vocab_size = 10000  # vocab size
 triple_num = 10  # max num of triples for each head entity
 
+
 def get_dataloader(data_path='data',
                    data_name='train',
                    batch_size=128,
