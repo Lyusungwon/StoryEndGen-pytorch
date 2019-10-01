@@ -232,25 +232,25 @@ def collate_text(batch):
     entity_mask_4 = entity_4[:, :, :, 0] == 4
 
     batched_data = {
-        'post_1': torch.tensor(post_1),
+        'post_1': torch.tensor(post_1),  # (batch_size, max_post_1_len)
         'post_2': torch.tensor(post_2),
         'post_3': torch.tensor(post_3),
         'post_4': torch.tensor(post_4),
-        'post_length_1': torch.tensor(post_length_1),
+        'post_length_1': torch.tensor(post_length_1),  # (batch_size,)
         'post_length_2': torch.tensor(post_length_2),
         'post_length_3': torch.tensor(post_length_3),
         'post_length_4': torch.tensor(post_length_4),
-        'responses': torch.tensor(responses),
-        'responses_length': torch.tensor(responses_length),
-        'entity_1': entity_1,
+        'responses': torch.tensor(responses),  # (batch_size, max_response_len)
+        'responses_length': torch.tensor(responses_length),  # (batch_size,)
+        'entity_1': entity_1,  # (batch_size, max_post_1_len, max_triple_num, 3)
         'entity_2': entity_2,
         'entity_3': entity_3,
         'entity_4': entity_4,
-        'entity_mask_1': entity_mask_1,
+        'entity_mask_1': entity_mask_1,  # (batch_size, max_post_1_len, max_triple_num)
         'entity_mask_2': entity_mask_2,
         'entity_mask_3': entity_mask_3,
         'entity_mask_4': entity_mask_4,
-        'entity_length_1': entity_length_list[0],
+        'entity_length_1': entity_length_list[0],  # (batch_size, max_post_1_len)
         'entity_length_2': entity_length_list[1],
         'entity_length_3': entity_length_list[2],
         'entity_length_4': entity_length_list[3]
@@ -260,8 +260,8 @@ def collate_text(batch):
 
 
 if __name__ == "__main__":
-    dataloader = get_dataloader(batch_size=128, shuffle=False)
-    for batch in tqdm(dataloader):
+    dataloader = get_dataloader(batch_size=3, shuffle=False)
+    for batch in dataloader:
         print("Size of batch properties with bach_size 3\n")
 
         print('post_1:', batch['post_1'].size())
