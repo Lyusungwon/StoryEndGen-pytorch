@@ -3,20 +3,13 @@ from collections import OrderedDict
 import torch
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
-from nltk.stem import WordNetLemmatizer
-
-# NOTE original repo used pattern.en.lemma, but since Pattern is incompatible with Python 3.7
-# (Refer to https://github.com/clips/pattern/issues/283)
-# We replaced it with WordNetLemmatizer.
+from pattern.text.en import lemma
 
 # Configurations
 # TODO change config variables below to flags
 _START_VOCAB = ['_PAD', '_UNK', '_SOS', '_EOS', '_NAF_H', '_NAF_R', '_NAF_T']
 vocab_size = 10000  # vocab size
 triple_num = 10  # max num of triples for each head entity
-
-lemmatizer = WordNetLemmatizer()
-
 
 def get_dataloader(data_path='data',
                    data_name='train',
@@ -151,8 +144,8 @@ def collate_text(batch):
 
     post_1, post_2, post_3, post_4 = [], [], [], []
     post_length_1, post_length_2, post_length_3, post_length_4 = [], [], [], []
-    responses = []
-    responses_length = []
+    response = []
+    response_length = []
 
     def padding(sent, length):
         """ Add sos and eos tokens, then pad sentence to length"""
@@ -176,9 +169,9 @@ def collate_text(batch):
 
     for i in range(len(batch_response)):
         response = batch_response[i]
-        responses.append(padding(response, max_response_len))
-        responses[-1] = list(map(transform, responses[-1]))
-        responses_length.append(len(response) + 2)
+        response.append(padding(response, max_response_len))
+        response[-1] = list(map(transform, response[-1]))
+        response_length.append(len(response) + 2)
 
     entity = [[], [], [], []]
     for posts in batch_posts:
@@ -187,7 +180,7 @@ def collate_text(batch):
             for j in range(len(posts[i])):
                 word = posts[i][j]
                 try:
-                    lemmatized = lemmatizer.lemmatize(word)
+                    lemmatized = lemma(word)
                 except UnicodeEncodeError:
                     lemmatized = word
                 if lemmatized in relation:
@@ -240,8 +233,8 @@ def collate_text(batch):
         'post_length_2': torch.tensor(post_length_2),
         'post_length_3': torch.tensor(post_length_3),
         'post_length_4': torch.tensor(post_length_4),
-        'responses': torch.tensor(responses),  # (batch_size, max_response_len)
-        'responses_length': torch.tensor(responses_length),  # (batch_size,)
+        'response': torch.tensor(response),  # (batch_size, max_response_len)
+        'response_length': torch.tensor(response_length),  # (batch_size,)
         'entity_1': entity_1,  # (batch_size, max_post_1_len, max_triple_num, 3)
         'entity_2': entity_2,
         'entity_3': entity_3,
@@ -260,8 +253,9 @@ def collate_text(batch):
 
 
 if __name__ == "__main__":
-    dataloader = get_dataloader(batch_size=3, shuffle=False)
-    for batch in dataloader:
+    dataloader = get_dataloader(batch_size=128, shuffle=False)
+    for batch in tqdm(dataloader):
+
         print("Size of batch properties with bach_size 3\n")
 
         print('post_1:', batch['post_1'].size())
