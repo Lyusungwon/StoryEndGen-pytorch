@@ -9,6 +9,8 @@ import torch.nn.functional as F
 from torch.nn.init import kaiming_uniform_
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, PackedSequence
 import pandas as pd
+import numpy as np
+import re
 
 PAD_ID = 0
 UNK_ID = 1
@@ -18,9 +20,13 @@ EOS_ID = 3
 def get_pretrained_glove(path, idx2word, n_special=4):
     print('Reading pretrained glove...')
     words = pd.read_csv(path, sep=" ", index_col=0, header=None, quoting=csv.QUOTE_NONE)
-
     def get_vec(w):
-        return words.loc[w].values.astype('float32')
+        # w = re.sub(r'\W+', '', w).lower() # SW: word tokenization needed
+        w = w.lower()
+        try:
+            return words.loc[w].values.astype('float32')
+        except KeyError: #_NAF_H, _NAF_R, _NAF_T
+            return np.zeros((200,), dtype='float32')
 
     weights = [torch.from_numpy(get_vec(w)) for i, w in list(idx2word.items())[n_special:]]
     weights = torch.stack(weights, dim=0)
