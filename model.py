@@ -10,8 +10,6 @@ from torch.nn.init import kaiming_uniform_
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, PackedSequence
 import pandas as pd
 
-import ipdb
-
 PAD_ID = 0
 UNK_ID = 1
 SOS_ID = 2
@@ -280,13 +278,13 @@ if __name__ == "__main__":
         ent_len_k = 'entity_length_{}'.format(i+1)
         ent_mask_k = 'entity_mask_{}'.format(i+1)
 
-        lengths = torch.randint(low=1, high=max_t, size=(bsz,))
-        batch[post_len_k] = torch.LongTensor(lengths)
-        max_post_t = lengths.max().item()
+        post_lengths = torch.randint(low=1, high=max_t, size=(bsz,)) # SW: variable name lengths -> post_lengths
+        batch[post_len_k] = torch.LongTensor(post_lengths)
+        max_post_t = post_lengths.max().item()
 
         batch[post_k] = torch.randint(high=args.n_word_vocab, size=(bsz, max_post_t))
         for b in range(bsz):
-            batch[post_k][b, lengths[b].item():] = 0
+            batch[post_k][b, post_lengths[b].item():] = 0
 
         batch[ent_k] = torch.zeros((bsz, max_post_t, max_n_triple, 3), dtype=torch.long)
         batch[ent_mask_k] = torch.zeros((bsz, max_post_t, max_n_triple), dtype=torch.bool)
@@ -294,7 +292,7 @@ if __name__ == "__main__":
         
         # first two batches: 
         for b in range(2):
-            for t in range(lengths[b].item()):
+            for t in range(post_lengths[b].item()):
                 # 첫 두개 triple만 채움
                 batch[ent_k][b, t, :2, 0] = batch[post_k][b, t] # head
                 batch[ent_k][b, t, :2, 1] = 1 # rel
@@ -303,7 +301,7 @@ if __name__ == "__main__":
             batch[ent_len_k][b, :] = 2
         
         # second-last batch
-        for t in range(lengths[-2].item()):
+        for t in range(post_lengths[-2].item()):
             # 하나만 채움
             batch[ent_k][-2, t, :1, 0] = batch[post_k][-2, t] # head
             batch[ent_k][-2, t, :1, 1] = 1 # rel
