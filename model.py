@@ -71,12 +71,14 @@ class IEMSAModel(nn.Module):
         # NOTE: 앞뒤로 sos(2), eos(3) 붙어오는 것 가정
         # mask: (bsz, len, n_triple)
 
+        # SW: Would it be better to do this on dataloader?
         post_lst = [batch['post_1'], batch['post_2'], batch['post_3'], batch['post_4']] # (bsz, timestep)
         post_length_lst = [batch['post_length_1'], batch['post_length_2'], batch['post_length_3'], batch['post_length_4']] # (bsz)
         entity_lst = [batch['entity_1'], batch['entity_2'], batch['entity_3'], batch['entity_4']] # (bsz, timestep, n_triple, 3)
         entity_length_lst = [batch['entity_length_1'], batch['entity_length_2'], batch['entity_length_3'], batch['entity_length_4']] # (bsz, timestep)
         entity_mask_lst = [batch['entity_mask_1'], batch['entity_mask_2'], batch['entity_mask_3'], batch['entity_mask_4']] # (bsz, timestep, n_triple)
         response = batch['response'] # (bsz, timestep)
+        ###
 
         # prev sentence
         cached_post, cached_post_mask = None, None
@@ -254,7 +256,7 @@ if __name__ == "__main__":
         for line in inf:
             w = line.split()[0]
             if w not in word2idx:
-                idx = len(word2idx) + 4
+                idx = len(word2idx) + 4  # SW: Why +4?
                 word2idx[w] = idx
         
             if len(word2idx) == args.n_word_vocab:
