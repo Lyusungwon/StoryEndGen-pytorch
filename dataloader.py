@@ -1,14 +1,17 @@
 from collections import OrderedDict
+from itertools import zip_longest
 
 import torch
 from torch.utils.data import Dataset, DataLoader
-from torch.nn.utils.rnn import pad_sequence
-from tqdm import tqdm
 from pattern.text.en import lemma
+import numpy as np
+
+from tqdm import tqdm
+
 
 # Configurations
 # TODO change config variables below to flags
-_START_VOCAB = ['_PAD', '_UNK', '_SOS', '_EOS', '_NAF_H', '_NAF_R', '_NAF_T']
+_START_VOCAB = ['_PAD', '_UNK', '_SOS', '_EOS', '_NAF_']
 vocab_size = 10000  # vocab size
 triple_num = 10  # max num of triples for each head entity
 
@@ -104,6 +107,7 @@ class ROCStoriesDataset(Dataset):
             else:
                 rel_dict[tmp[0]] = [tmp]
 
+        keys_to_del = []
         for r in rel_dict.keys():  # r: head entity of each rel_dict
             tmp_vocab = {}
             i = 0
@@ -114,10 +118,16 @@ class ROCStoriesDataset(Dataset):
             tmp_list = sorted(tmp_vocab, key=tmp_vocab.get)[:triple_num] if len(
                 tmp_vocab) > triple_num else sorted(tmp_vocab, key=tmp_vocab.get)
 
-            new_relation = []
-            for i in tmp_list:
-                new_relation.append(rel_dict[r][i])
-            rel_dict[r] = new_relation
+            if len(tmp_list) == 0:
+                keys_to_del.append(r)
+            else:
+                new_relation = []
+                for i in tmp_list:
+                    new_relation.append(rel_dict[r][i])
+                rel_dict[r] = new_relation
+
+        for key in keys_to_del:
+            rel_dict.pop(key)
 
         return rel_dict
 
@@ -188,43 +198,38 @@ def collate_text(batch):
                 if lemmatized in relation:
                     entity[i][-1].append([list(map(transform, triple)) for triple in relation[lemmatized]])
                 else:
-                    entity[i][-1].append([[4, 5, 6]])  # naf_h, naf_r, naf_t
+                    entity[i][-1].append([[4, 4, 4]])  # naf_h, naf_r, naf_t
 
     # entity[i][j][k][l] : lth triple with kth word in ith post of jth sample as head entity
 
     max_triple_len = [0, 0, 0, 0]
-    for i in range(4):
-        for item in entity[i]:
-            for triple in item:
-                if len(triple) > max_triple_len[i]:
-                    max_triple_len[i] = len(triple)
-
-    entity_length_list = []
-    for i in range(4):
-        entity_length_list.append(torch.zeros(len(batch_posts), max_post_len_list[i]))
+    # entity_length_list = []
 
     for i in range(4):
         for j in range(len(entity[i])):
-            entity[i][j] = [[[4, 5, 6]]] + entity[i][j] + [[[4, 5, 6]]]  # add padding for 'sos', 'eos'
             for k in range(len(entity[i][j])):
-                entity_length_list[i][j][k] = len(entity[i][j][k])
+                if len(entity[i][j][k]) > max_triple_len[i]:
+                    max_triple_len[i] = len(entity[i][j][k])
 
-                # pad each triple list to max_triple_length
-                if len(entity[i][j][k]) < max_triple_len[i]:
-                    entity[i][j][k] = entity[i][j][k] + [[4, 5, 6]] * (max_triple_len[i] - len(entity[i][j][k]))
+    entity_list = []
+    entity_mask_list = []
+    entity_length_list = []
 
-            # pad each post_i to (max_post_len_list, max_triple_len)
-            if len(entity[i][j]) < (max_post_len_list[i]):
-                entity[i][j] = entity[i][j] + [[[4, 5, 6]] * max_triple_len[i]] * (max_post_len_list[i] - len(entity[i][j]))
+    for i in range(4):
+        entity_list.append(np.array(list(zip_longest(*entity[i], fillvalue=[[4, 4, 4]]))).T)
 
-    entity_1 = torch.tensor(entity[0])
-    entity_mask_1 = entity_1[:, :, :, 0] == 4
-    entity_2 = torch.tensor(entity[1])
-    entity_mask_2 = entity_2[:, :, :, 0] == 4
-    entity_3 = torch.tensor(entity[2])
-    entity_mask_3 = entity_3[:, :, :, 0] == 4
-    entity_4 = torch.tensor(entity[3])
-    entity_mask_4 = entity_4[:, :, :, 0] == 4
+        entity_list[i] = np.array(
+            [np.pad(triples, pad_width=((0, max_triple_len[i] - len(triples)), (0, 0)), mode='constant', constant_values=4)
+             for sample in entity_list[i] for triples in sample])
+
+        entity_list[i] = entity_list[i].reshape((len(batch), -1, max_triple_len[i], 3))
+        pre_post_fix = np.full((len(batch), 1, max_triple_len[i], 3), 4)
+        entity_list[i] = np.concatenate((pre_post_fix, entity_list[i], pre_post_fix), axis=1)
+
+    for i in range(4):
+        entity_list[i] = torch.tensor(entity_list[i])
+        entity_mask_list.append(entity_list[i][:, :, :, 0] == 4)
+        entity_length_list.append(torch.sum((entity_list[i][:, :, :, 0] != 4), dim=2))
 
     batched_data = {
         'post_1': torch.tensor(post_1),  # (batch_size, max_post_1_len)
@@ -237,14 +242,14 @@ def collate_text(batch):
         'post_length_4': torch.tensor(post_length_4),
         'response': torch.tensor(response),  # (batch_size, max_response_len)
         'response_length': torch.tensor(response_length),  # (batch_size,)
-        'entity_1': entity_1,  # (batch_size, max_post_1_len, max_triple_num, 3)
-        'entity_2': entity_2,
-        'entity_3': entity_3,
-        'entity_4': entity_4,
-        'entity_mask_1': entity_mask_1,  # (batch_size, max_post_1_len, max_triple_num)
-        'entity_mask_2': entity_mask_2,
-        'entity_mask_3': entity_mask_3,
-        'entity_mask_4': entity_mask_4,
+        'entity_1': entity_list[0],  # (batch_size, max_post_1_len, max_triple_num, 3)
+        'entity_2': entity_list[1],
+        'entity_3': entity_list[2],
+        'entity_4': entity_list[3],
+        'entity_mask_1': entity_mask_list[0],  # (batch_size, max_post_1_len, max_triple_num)
+        'entity_mask_2': entity_mask_list[1],
+        'entity_mask_3': entity_mask_list[2],
+        'entity_mask_4': entity_mask_list[3],
         'entity_length_1': entity_length_list[0],  # (batch_size, max_post_1_len)
         'entity_length_2': entity_length_list[1],
         'entity_length_3': entity_length_list[2],
@@ -257,7 +262,6 @@ def collate_text(batch):
 if __name__ == "__main__":
     dataloader = get_dataloader(batch_size=3, shuffle=False)
     for batch in tqdm(dataloader):
-
         print("Size of batch properties with bach_size 3\n")
 
         print('post_1:', batch['post_1'].size())
@@ -269,4 +273,3 @@ if __name__ == "__main__":
         print('entity_length_1:', batch['entity_length_1'].size())
 
         break
-
