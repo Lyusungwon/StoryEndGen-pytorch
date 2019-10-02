@@ -2,6 +2,7 @@ from collections import OrderedDict
 
 import torch
 from torch.utils.data import Dataset, DataLoader
+from torch.nn.utils.rnn import pad_sequence
 from tqdm import tqdm
 from pattern.text.en import lemma
 
@@ -169,10 +170,10 @@ def collate_text(batch):
         post_length_4.append(len(posts[3]) + 2)
 
     for i in range(len(batch_response)):
-        response = batch_response[i]
-        response.append(padding(response, max_response_len))
+        sample_response = batch_response[i]
+        response.append(padding(sample_response, max_response_len))
         response[-1] = list(map(transform, response[-1]))
-        response_length.append(len(response) + 2)
+        response_length.append(len(sample_response) + 2)
 
     entity = [[], [], [], []]
     for posts in batch_posts:
@@ -254,15 +255,15 @@ def collate_text(batch):
 
 
 if __name__ == "__main__":
-    dataloader = get_dataloader(batch_size=128, shuffle=False)
+    dataloader = get_dataloader(batch_size=3, shuffle=False)
     for batch in tqdm(dataloader):
 
         print("Size of batch properties with bach_size 3\n")
 
         print('post_1:', batch['post_1'].size())
         print('post_length_1:', batch['post_length_1'].size())
-        print('responses:', batch['responses'].size())
-        print('responses_length:', batch['responses_length'].size())
+        print('response:', batch['response'].size())
+        print('response_length:', batch['response_length'].size())
         print('entity_1:', batch['entity_1'].size())
         print('entity_mask_1:', batch['entity_mask_1'].size())
         print('entity_length_1:', batch['entity_length_1'].size())
