@@ -83,7 +83,7 @@ class IEMSAModel(nn.Module):
         entity_lst = [batch['entity_1'], batch['entity_2'], batch['entity_3'], batch['entity_4']] # (bsz, timestep, n_triple, 3)
         entity_length_lst = [batch['entity_length_1'], batch['entity_length_2'], batch['entity_length_3'], batch['entity_length_4']] # (bsz, timestep)
         entity_mask_lst = [batch['entity_mask_1'], batch['entity_mask_2'], batch['entity_mask_3'], batch['entity_mask_4']] # (bsz, timestep, n_triple)
-        responses = batch['responses'] # (bsz, timestep)
+        response = batch['response'] # (bsz, timestep)
         ###
 
         # prev sentence
@@ -142,11 +142,11 @@ class IEMSAModel(nn.Module):
             cached_post, cached_post_mask, cached_graph_vec, cached_graph_vec_mask = post, post_mask, graph_vec, graph_vec_mask
 
         ### Decode: supports unrolling.
-        bsz, max_decode_len = responses.size()
+        bsz, max_decode_len = response.size()
         dec_logits = torch.zeros(max_decode_len, bsz, self.n_vocab)
 
         # SOS token
-        dec_input = responses[:, :1] # (b, 1)
+        dec_input = response[:, :1] # (b, 1)
 
         for t in range(max_decode_len):
             dec_input = self.word_embedding(dec_input)
@@ -161,8 +161,8 @@ class IEMSAModel(nn.Module):
             top1 = logit.max(-1)[1] # (b, 1)
 
             # stochastic teacher forcing
-            if random.random() < teacher_force_ratio and t < responses.size()[1]-1: # SW: teacher forcing does not applied in the last
-                dec_input = responses[:, t + 1].unsqueeze(1) # ground truth
+            if random.random() < teacher_force_ratio and t < response.size()[1]-1: # SW: teacher forcing does not applied in the last
+                dec_input = response[:, t + 1].unsqueeze(1) # ground truth
             else:
                 dec_input = top1
 
@@ -262,7 +262,7 @@ if __name__ == "__main__":
         for line in inf:
             w = line.split()[0]
             if w not in word2idx:
-                idx = len(word2idx) + 4  # SW: Why +4?
+                idx = len(word2idx)
                 word2idx[w] = idx
         
             if len(word2idx) == args.n_word_vocab:
@@ -322,7 +322,7 @@ if __name__ == "__main__":
         batch[ent_mask_k][-1, :, :] = 1
         batch[ent_len_k][-1, :] = 0
 
-    batch['responses'] = torch.randint(high=args.n_word_vocab, size=(bsz, max_t))
+    batch['response'] = torch.randint(high=args.n_word_vocab, size=(bsz, max_t))
     batch = {key: val.to("cuda:0") for key, val in batch.items()}
 
     model(batch)
