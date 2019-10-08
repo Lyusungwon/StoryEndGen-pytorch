@@ -13,7 +13,7 @@ def epoch(epoch_idx, is_train):
         batch = {key: val.to(device) for key, val in batch.items()}
         optimizer.zero_grad()
         output = model(batch)
-        loss = criterion(output, batch['response'])
+        loss = criterion(output[1], batch['response'])
         if is_train:
             loss.backward()
             optimizer.step()
@@ -39,7 +39,7 @@ if __name__ == '__main__':
     parser.add_argument('--d_hidden', type=int, default=256)
     parser.add_argument('--d_context', type=int, default=256) # msa context vector
     parser.add_argument('--n_word_vocab', type=int, default=10000)
-    parser.add_argument('--n_rel_vocab', type=int, default=10)
+    parser.add_argument('--n_rel_vocab', type=int, default=45)
     parser.add_argument('--n_layer', type=int, default=2)
     parser.add_argument('--max_decode_len', type=int, default=10)
     parser.add_argument('--seed', type=int, default=42)

@@ -175,7 +175,7 @@ class IEMSAModel(nn.Module):
 
         # TODO: inference decode logic.
             
-        return enc_logits, dec_logits.transpose(0, 1)
+        return enc_logits, dec_logits.permute(1, 2, 0)
 
 
 class MultiSourceAttention(nn.Module):
