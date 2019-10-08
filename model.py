@@ -3,6 +3,7 @@ import argparse
 from collections import OrderedDict
 import random
 
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -18,22 +19,28 @@ SOS_ID = 2
 EOS_ID = 3
 
 def get_pretrained_glove(path, idx2word, n_special=4):
-    print('Reading pretrained glove...')
-    words = pd.read_csv(path, sep=" ", index_col=0, header=None, quoting=csv.QUOTE_NONE)
-    def get_vec(w):
-        # w = re.sub(r'\W+', '', w).lower() # SW: word tokenization needed
-        w = w.lower()
-        try:
-            return words.loc[w].values.astype('float32')
-        except KeyError: #_NAF_H, _NAF_R, _NAF_T
-            return np.zeros((200,), dtype='float32')
+    saved_glove = path.replace('.txt', '.pt')
+    def make_glove():
+        print('Reading pretrained glove...')
+        words = pd.read_csv(path, sep=" ", index_col=0, header=None, quoting=csv.QUOTE_NONE)
+        def get_vec(w):
+            # w = re.sub(r'\W+', '', w).lower() # SW: word tokenization needed
+            w = w.lower()
+            try:
+                return words.loc[w].values.astype('float32')
+            except KeyError: #_NAF_H, _NAF_R, _NAF_T
+                return np.zeros((200,), dtype='float32')
 
-    weights = [torch.from_numpy(get_vec(w)) for i, w in list(idx2word.items())[n_special:]]
-    weights = torch.stack(weights, dim=0)
+        weights = [torch.from_numpy(get_vec(w)) for i, w in list(idx2word.items())[n_special:]]
+        weights = torch.stack(weights, dim=0)
 
-    addvec = torch.randn(n_special, weights.size(1))
-    weights = torch.cat([addvec, weights], dim=0)
-    return weights
+        addvec = torch.randn(n_special, weights.size(1))
+        weights = torch.cat([addvec, weights], dim=0)
+        torch.save(weights, saved_glove)
+        print(f"Glove saved in {saved_glove}")
+    if not os.path.isfile(saved_glove):
+        make_glove()
+    return torch.load(saved_glove)
 
 
 def get_pad_mask(valid_bsz_by_timestep):

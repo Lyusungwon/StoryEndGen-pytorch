@@ -1,10 +1,11 @@
 from collections import OrderedDict
 from itertools import zip_longest
-
+import os
 import torch
 from torch.utils.data import Dataset, DataLoader
 from pattern.text.en import lemma
 import numpy as np
+import pickle as pkl
 
 from tqdm import tqdm
 
@@ -43,41 +44,59 @@ class ROCStoriesDataset(Dataset):
         assert data_name in ['train', 'test', 'val'], "Data name should be among ['train', 'test', 'val']."
 
         self.data_path = data_path
-        self.data_name = data_name
+        self.data_file = f'{self.data_path}/{data_name}_data.pkl'
+        self.vocab_file = f'{self.data_path}/vocab.pkl'
+        self.rel_file = f'{self.data_path}/relation.pkl'
 
-        self.data = self.load_data(data_name)
+        if not os.path.isfile(self.data_file):
+            self.make_data()
+        self.data = self.load_file(self.data_file)
         # self.data: [{'post': [[sent1], [sent2], [sent3], [sent4]], 'response': [sent]}, ...]
-        self.vocab_list, self._vocab_dict = self.build_vocab()
-        self.rel_dict = self.load_relation()
+
+        if not os.path.isfile(self.vocab_file):
+            self.make_vocab()
+        self.vocab_list, self._vocab_dict = self.load_file(self.vocab_file)
+
+        if not os.path.isfile(self.rel_file):
+            self.make_relation()
+        self.rel_dict = self.load_file(self.rel_file)
 
         self.idx2word = OrderedDict([(idx, vocab) for idx, vocab in enumerate(self.vocab_list)])
         self.word2idx = OrderedDict([(vocab, idx) for idx, vocab in enumerate(self.vocab_list)])
 
-    def load_data(self, data_name):
-        post = []
-        with open(f'{self.data_path}/{data_name}.post', 'r', encoding='latin-1') as f:
-            lines = f.readlines()
-            for line in lines:
-                tmp = line.strip().split("\t")
-                post.append([p.split() for p in tmp])
-
-        with open(f'{self.data_path}/{data_name}.response', 'r', encoding='latin-1') as f:
-            response = [line.strip().split() for line in f.readlines()]
-
-        data = []
-        for p, r in zip(post, response):
-            data.append({'post': p, 'response': r})
-
+    def load_file(self, file_dir):
+        with open(file_dir, 'rb') as f:
+            data = pkl.load(f)
         return data
 
-    def build_vocab(self):
+    def make_data(self):
+        post = []
+        for data_name in ['train', 'val', 'test']:
+            with open(f'{self.data_path}/{data_name}.post', 'r', encoding='latin-1') as f:
+                lines = f.readlines()
+                for line in lines:
+                    tmp = line.strip().split("\t")
+                    post.append([p.split() for p in tmp])
+
+            with open(f'{self.data_path}/{data_name}.response', 'r', encoding='latin-1') as f:
+                response = [line.strip().split() for line in f.readlines()]
+
+            data = []
+            for p, r in zip(post, response):
+                data.append({'post': p, 'response': r})
+
+            with open(f'{self.data_path}/{data_name}_data.pkl', 'wb') as f:
+                pkl.dump(data, f, pkl.HIGHEST_PROTOCOL)
+            print(f"Data saved in {self.data_path}/{data_name}_data.pkl")
+
+    def make_vocab(self):
         relation_vocab_list = []
         relation_file = open(f'{self.data_path}/relations.txt', 'r')
         for line in relation_file:
             relation_vocab_list += line.strip().split()
 
         vocab_dict = {}
-        for i, pair in enumerate(self.load_data('train')):  # NOTE only use train set vocab
+        for i, pair in enumerate(self.load_file(f'{self.data_path}/train_data.pkl')):  # NOTE only use train set vocab
             for token in [word for sent in pair['post'] for word in sent] + pair['response']:
                 if token in vocab_dict:
                     vocab_dict[token] += 1
@@ -89,9 +108,11 @@ class ROCStoriesDataset(Dataset):
         if len(vocab_list) > vocab_size:
             vocab_list = vocab_list[:vocab_size]  # limit vocab_size
 
-        return vocab_list, vocab_dict
+        with open(self.vocab_file, 'wb') as f:
+            pkl.dump((vocab_list, vocab_dict), f, pkl.HIGHEST_PROTOCOL)
+        print(f"Vocab saved in {self.vocab_file}")
 
-    def load_relation(self):
+    def make_relation(self):
         """
         :return: rel_dict['hi'] = [['hi', '/r/RelatedTo', 'friendly'], ['hi', '/r/RelatedTo', 'high'], ...]
                  each head entity has `triple_num` rel_dict triples, sorted by tail entity frequency in corpus
@@ -128,8 +149,9 @@ class ROCStoriesDataset(Dataset):
 
         for key in keys_to_del:
             rel_dict.pop(key)
-
-        return rel_dict
+        with open(self.rel_file, 'wb') as f:
+            pkl.dump(rel_dict, f, pkl.HIGHEST_PROTOCOL)
+        print(f"Relation saved in {self.rel_file}")
 
     def __len__(self):
         return len(self.data)
