@@ -12,6 +12,8 @@ import pandas as pd
 import numpy as np
 import re
 
+import ipdb
+
 PAD_ID = 0
 UNK_ID = 1
 SOS_ID = 2
@@ -194,6 +196,7 @@ class MultiSourceAttention(nn.Module):
         knowledge_attn = torch.bmm(self.W_k(query), knowledge_keyval.transpose(1, 2)) # (bsz, len_q, len_kv)
         if knowledge_mask is not None:
             knowledge_attn.data.masked_fill_(knowledge_mask, -float('inf'))
+            knowledge_keyval.data.masked_fill_(knowledge_mask.squeeze(1).unsqueeze(-1), 0)
         knowledge_attn = F.softmax(knowledge_attn, dim=-1)
         knowledge_context = torch.bmm(knowledge_attn, knowledge_keyval) # (bsz, len_q, d)
 
@@ -227,7 +230,7 @@ class GraphAttention(nn.Module):
 
         attn = (r * torch.tanh(h + t)).sum(-1) # (b, l, n)
         if mask is not None:
-            attn.data.masked_fill_(mask, -float('inf')) # TODO
+            attn.data.masked_fill_(mask, -float('inf'))
         attn = F.softmax(attn, dim=-1) # (b, l, n)
 
         # # mask for knowledge attention
@@ -299,17 +302,21 @@ if __name__ == "__main__":
         batch[ent_mask_k] = torch.zeros((bsz, max_post_t, max_n_triple), dtype=torch.bool)
         batch[ent_len_k] = torch.empty(bsz, max_post_t)
         
-        # first two batches: 
-        for b in range(2):
-            for t in range(post_lengths[b].item()):
-                # 첫 두개 triple만 채움
-                batch[ent_k][b, t, :2, 0] = batch[post_k][b, t] # head
-                batch[ent_k][b, t, :2, 1] = 1 # rel
-                batch[ent_k][b, t, :2, 2] = torch.randint(high=args.n_word_vocab, size=(2,)) # tail
-            batch[ent_mask_k][b, :, -1] = 1
-            batch[ent_len_k][b, :] = 2
+        for t in range(post_lengths[b].item()):
+            # 모든 triple 다 채움
+            batch[ent_k][0, t, :, 0] = batch[post_k][0, t] # head
+            batch[ent_k][0, t, :, 1] = 1 # rel
+            batch[ent_k][0, t, :, 2] = torch.randint(high=args.n_word_vocab, size=(3,)) # tail
+        batch[ent_len_k][0, :] = 3
+
+        for t in range(post_lengths[b].item()):
+            # 첫 두개 triple만 채움
+            batch[ent_k][1, t, :2, 0] = batch[post_k][1, t] # head
+            batch[ent_k][1, t, :2, 1] = 1 # rel
+            batch[ent_k][1, t, :2, 2] = torch.randint(high=args.n_word_vocab, size=(2,)) # tail
+        batch[ent_mask_k][1, :, -1] = 1
+        batch[ent_len_k][1, :] = 2
         
-        # second-last batch
         for t in range(post_lengths[-2].item()):
             # 하나만 채움
             batch[ent_k][-2, t, :1, 0] = batch[post_k][-2, t] # head
