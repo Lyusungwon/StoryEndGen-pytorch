@@ -152,7 +152,7 @@ class IEMSAModel(nn.Module):
 
         ### Decode: supports unrolling.
         bsz, max_decode_len = response.size()
-        dec_logits = torch.zeros(max_decode_len, bsz, self.n_vocab)
+        dec_logits = torch.zeros(max_decode_len, bsz, self.n_vocab).to(response.device)
 
         # SOS token
         dec_input = response[:, :1] # (b, 1)
