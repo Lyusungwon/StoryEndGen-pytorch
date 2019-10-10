@@ -14,11 +14,13 @@ def epoch(epoch_idx, is_train):
         optimizer.zero_grad()
         output = model(batch)
         loss = criterion(output[1], batch['response'])
+        for n, post in enumerate(['post_2', 'post_3', 'post_4']):
+            loss += criterion(output[0][n+1], batch[post])
         if is_train:
             loss.backward()
             optimizer.step()
         if is_train and (batch_idx % args.log_interval == 0):
-            print(epoch_idx, loss)
+            print(epoch_idx, loss.item())
 
 
 def train():
