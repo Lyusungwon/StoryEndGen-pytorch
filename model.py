@@ -13,8 +13,6 @@ import pandas as pd
 import numpy as np
 import re
 
-import ipdb
-
 PAD_ID = 0
 UNK_ID = 1
 SOS_ID = 2
@@ -202,7 +200,7 @@ class MultiSourceAttention(nn.Module):
 
         knowledge_attn = torch.bmm(self.W_k(query), knowledge_keyval.transpose(1, 2)) # (bsz, len_q, len_kv)
         if knowledge_mask is not None:
-            knowledge_attn.data.masked_fill_(knowledge_mask, -float('inf'))
+            # knowledge_attn.data.masked_fill_(knowledge_mask, -float('inf'))
             knowledge_keyval.data.masked_fill_(knowledge_mask.squeeze(1).unsqueeze(-1), 0)
         knowledge_attn = F.softmax(knowledge_attn, dim=-1)
         knowledge_context = torch.bmm(knowledge_attn, knowledge_keyval) # (bsz, len_q, d)
@@ -232,12 +230,14 @@ class GraphAttention(nn.Module):
         h, _, t = entity.chunk(3, dim=-1) # [(b, l, n, d) ..]
         ht = torch.cat([h, t], dim=-1) # (b, l, n, 2d)
         ht = self.proj(ht) # (b, l, n, d)
+        if mask is not None:
+            ht.data.masked_fill_(mask.unsqueeze(-1), 0)
 
         h, r, t = self.W(entity).chunk(3, dim=-1) # [(b, l, n, d) ..]
 
         attn = (r * torch.tanh(h + t)).sum(-1) # (b, l, n)
-        if mask is not None:
-            attn.data.masked_fill_(mask, -float('inf'))
+        # if mask is not None:
+        #     attn.data.masked_fill_(mask, -float('inf'))
         attn = F.softmax(attn, dim=-1) # (b, l, n)
 
         # # mask for knowledge attention
