@@ -150,12 +150,12 @@ class IEMSAModel(nn.Module):
 
         ### Decode: supports unrolling.
         bsz, max_decode_len = response.size()
-        dec_logits = torch.zeros(max_decode_len, bsz, self.n_vocab).to(response.device)
+        dec_logits = torch.zeros(max_decode_len - 1, bsz, self.n_vocab).to(response.device)
 
         # SOS token
         dec_input = response[:, :1] # (b, 1)
 
-        for t in range(max_decode_len):
+        for t in range(max_decode_len - 1):
             dec_input = self.word_embedding(dec_input)
 
             # reuse encoder lstm hidden
@@ -168,7 +168,7 @@ class IEMSAModel(nn.Module):
             top1 = logit.max(-1)[1] # (b, 1)
 
             # stochastic teacher forcing
-            if random.random() < teacher_force_ratio and t < response.size()[1]-1: # SW: teacher forcing does not applied in the last
+            if random.random() < teacher_force_ratio: # SW: teacher forcing does not applied in the last / and t < response.size()[1]-1
                 dec_input = response[:, t + 1].unsqueeze(1) # ground truth
             else:
                 dec_input = top1
