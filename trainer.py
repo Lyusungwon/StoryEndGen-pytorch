@@ -4,23 +4,30 @@ from model import IEMSAModel
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import datetime
+from tensorboardX import SummaryWriter
+from recorder import Recorder
 
 
 def epoch(epoch_idx, is_train):
     model.train() if is_train else model.eval()
     loader = train_loader if is_train else val_loader
+    recorder.epoch_start(epoch_idx, is_train, loader)
     for batch_idx, batch in enumerate(loader):
+        batch_size = batch['response'].size()[0]
         batch = {key: val.to(device) for key, val in batch.items()}
         optimizer.zero_grad()
         output = model(batch)
-        loss = criterion(output[1], batch['response'])
-        for n, post in enumerate(['post_2', 'post_3', 'post_4']):
-            loss += criterion(output[0][n+1], batch[post])
+        loss = criterion(output[1], batch['response'][:, 1:])
+        # for n, post in enumerate(['post_2', 'post_3', 'post_4']):
+        #     loss += criterion(output[0][n+1], batch[post][:, 1:])
         if is_train:
             loss.backward()
             optimizer.step()
-        if is_train and (batch_idx % args.log_interval == 0):
-            print(epoch_idx, loss.item())
+        recorder.batch_end(batch_idx, batch_size, loss.item())
+    recorder.log_text(output, batch)
+    recorder.epoch_end()
+
 
 
 def train():
@@ -33,10 +40,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='parser')
     parser.add_argument('--project', type=str, default='iemsa')
     parser.add_argument('--data_dir', type=str, default='data')
-    parser.add_argument('--batch_size', type=int, default=32)
-    parser.add_argument('--epochs', type=int, default=10)
+    parser.add_argument('--log_dir', type=str, default='log')
+    parser.add_argument('--timestamp', type=str, default=datetime.datetime.now().strftime("%y%m%d%H%M%S"))
+    parser.add_argument('--batch_size', type=int, default=128)
+    parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--lr', type=float, default=1e-4)
-    parser.add_argument('--log_interval', type=int, default=10)
+    parser.add_argument('--log_interval', type=int, default=100)
     parser.add_argument('--glove_path', type=str, default='data/glove.6B.200d.txt')
     parser.add_argument('--d_embed', type=int, default=200)
     parser.add_argument('--d_hidden', type=int, default=256)
@@ -56,6 +65,8 @@ if __name__ == '__main__':
     model = IEMSAModel(args, train_loader.dataset.idx2word)
     model = model.to(device)
     optimizer = optim.Adam(model.parameters(), args.lr)
-    criterion = nn.NLLLoss()
+    criterion = nn.CrossEntropyLoss(ignore_index=0)
+    writer = SummaryWriter(f'{args.log_dir}/{args.timestamp}')
+    recorder = Recorder(args, writer, train_loader.dataset.idx2word)
 
     train()
