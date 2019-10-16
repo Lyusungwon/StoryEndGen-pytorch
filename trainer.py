@@ -39,9 +39,9 @@ def train():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='parser')
     parser.add_argument('--project', type=str, default='iemsa')
+    parser.add_argument('--timestamp', type=str, default=datetime.datetime.now().strftime("%y%m%d%H%M%S"))
     parser.add_argument('--data_dir', type=str, default='data')
     parser.add_argument('--log_dir', type=str, default='log')
-    parser.add_argument('--timestamp', type=str, default=datetime.datetime.now().strftime("%y%m%d%H%M%S"))
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--lr', type=float, default=1e-4)
@@ -67,7 +67,7 @@ if __name__ == '__main__':
     model = model.to(device)
     optimizer = optim.Adam(model.parameters(), args.lr)
     criterion = nn.CrossEntropyLoss(ignore_index=0)
-    writer = SummaryWriter(f'{args.log_dir}/{args.timestamp}')
+    writer = SummaryWriter(f'{args.log_dir}/{args.project}_{args.timestamp}')
     recorder = Recorder(args, writer, train_loader.dataset.idx2word)
 
     train()
