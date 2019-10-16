@@ -8,6 +8,7 @@ class Recorder:
         self.log_interval = args.log_interval
         self.writer = writer
         self.idx2word = idx2word
+        print(f'Record {self.timestamp}')
 
     def epoch_start(self, epoch_idx, is_train, loader):
         self.epoch_idx = epoch_idx
@@ -49,16 +50,14 @@ class Recorder:
     def log_text(self, output, batch):
         if self.mode == 'Val':
             n = min(batch['response'].size()[0], 8)
-            batch_logits = list()
-            output_logits = list()
-            for batch_key, logit in zip(['post_2', 'post_3', 'post_4'], output[0]):
-                batch_logits.append(batch[batch_key][:n].cpu())
-                output_logits.append(torch.max(logit.cpu().detach(), 1)[1])
-            batch_logits.append(batch['response'][:n].cpu())
-            output_logits.append(torch.max(output[1].cpu().detach(), 1)[1])
-            for n, lines in enumerate(zip(*batch_logits, *output_logits)):
-                texts = [f'({n})']
+            text_idx = list()
+            for batch_key in ['post_1', 'post_2', 'post_3', 'post_4', 'response']:
+                text_idx.append(batch[batch_key][:n].cpu())
+            for logit in output[0]+[output[1]]:
+                text_idx.append(torch.max(logit.cpu().detach(), 1)[1])
+            for n, lines in enumerate(zip(*text_idx)):
+                texts = [f'{n+1}']
                 for line in lines:
                     texts.append(' '.join([self.idx2word[idx.item()] for idx in line if idx in idx > 3]))
-                self.writer.add_text('Samples', '-'.join(texts), self.epoch_idx)
+                self.writer.add_text('Samples', ' - '.join(texts), self.epoch_idx)
 
