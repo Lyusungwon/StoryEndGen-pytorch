@@ -141,9 +141,9 @@ class IEMSAModel(nn.Module):
                 # attention on previous post
                 enc_output, *_ = self.attn(query=post, state_keyval=cached_post, knowledge_keyval=cached_graph_vec, state_mask=cached_post_mask, knowledge_mask=cached_graph_vec_mask)
 
-            # if i < 3: SW: Why??
-            logits = self.out(enc_output) # (b, l, n_vocab)
-            enc_logits.append(logits.transpose(1, 2))
+            if i > 0:
+                logits = self.out(enc_output[:, :-1, :])  # (b, l, n_vocab)
+                enc_logits.append(logits.transpose(1, 2))
 
             # cache for later use.
             cached_post, cached_post_mask, cached_graph_vec, cached_graph_vec_mask = post, post_mask, graph_vec, graph_vec_mask
@@ -168,7 +168,7 @@ class IEMSAModel(nn.Module):
             top1 = logit.max(-1)[1] # (b, 1)
 
             # stochastic teacher forcing
-            if random.random() < teacher_force_ratio: # SW: teacher forcing does not applied in the last / and t < response.size()[1]-1
+            if random.random() < teacher_force_ratio:
                 dec_input = response[:, t + 1].unsqueeze(1) # ground truth
             else:
                 dec_input = top1

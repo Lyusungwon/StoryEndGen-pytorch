@@ -19,8 +19,8 @@ def epoch(epoch_idx, is_train):
         optimizer.zero_grad()
         output = model(batch)
         loss = criterion(output[1], batch['response'][:, 1:])
-        # for n, post in enumerate(['post_2', 'post_3', 'post_4']):
-        #     loss += criterion(output[0][n+1], batch[post][:, 1:])
+        for logit, batch_key in zip(output[0], ['post_2', 'post_3', 'post_4']):
+            loss += criterion(logit, batch[batch_key][:, 1:])
         if is_train:
             loss.backward()
             optimizer.step()
